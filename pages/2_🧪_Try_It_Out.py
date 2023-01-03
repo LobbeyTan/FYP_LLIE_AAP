@@ -90,6 +90,7 @@ def createTempZipFile(folder):
     return shutil.make_archive('./temp/result', "zip", folder)
 
 
+@st.cache(allow_output_mutation=True)
 def loadModels():
     # Load models
     enhancer = LowLightImageEnhancer()
@@ -123,7 +124,8 @@ st.set_page_config(layout="wide", page_title="Low Light Image Enhancement")
 
 st.header("Enhance And Detect Object in Low Light Image")
 
-enhancer, detector = loadModels()
+with st.spinner(text="Loading models ..."):
+    enhancer, detector = loadModels()
 
 st.sidebar.write("## Upload or Select :gear:")
 

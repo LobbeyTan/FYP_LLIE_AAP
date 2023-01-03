@@ -44,7 +44,7 @@ class ObjectDetector:
 
         for i in range(len(classes)):
             color = tuple(self.colors[int(classes[i])])
-            print(color)
+
             label = f' {labels[int(classes[i])]} {scores[i]:.2f} '
             x1, y1, x2, y2 = boxes[i]
 

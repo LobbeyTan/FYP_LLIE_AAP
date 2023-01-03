@@ -3,6 +3,8 @@ import os
 from subprocess import run
 
 if os.name == 'poxis':
+    run('sudo apt-get update')
+    run("sudo apt-get install libgl1")
     run("sudo apt-get install python3-opencv")
 
 st.set_page_config(layout="wide", page_title="Low Light Image Enhancement")

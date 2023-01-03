@@ -1,13 +1,13 @@
 import os
-import torch
+from datetime import datetime
+from time import time
+
 import numpy as np
+import torch
 import torch.nn.functional as F
 import torchvision.transforms as transforms
-
-from torch import nn
 from PIL import Image
-from datetime import datetime
-from torchvision.transforms import InterpolationMode
+from torch import nn
 
 
 def pad_tensor(input):
@@ -404,6 +404,7 @@ class LowLightImageEnhancer:
     def __init__(self) -> None:
         self.G = Unet_resize_conv()
         self.__load_model()
+        self.running_time = 0
 
     def __load_model(self):
         path = os.getcwd() + r'/models/net_G.pth'
@@ -450,9 +451,11 @@ class LowLightImageEnhancer:
         self.__preprocessInput(image)
 
         with torch.no_grad():
+            start = time()
             self.fake_B, self.latent_real_A = self.G(
                 self.input_A, self.input_A_gray
             )
+            self.running_time = time() - start
 
         output = self.__tensor2im(self.fake_B)
 

@@ -61,10 +61,10 @@ def getAnnotationDF(folder: str):
                     lambda x: "%32s" % cls_to_label[int(x)]
                 )
 
-                df['x'] = df['x'].apply(lambda x: "%03d" % (float(x) * 256))
-                df['y'] = df['y'].apply(lambda x: "%03d" % (float(x) * 256))
-                df['w'] = df['w'].apply(lambda x: "%03d" % (float(x) * 256))
-                df['h'] = df['h'].apply(lambda x: "%03d" % (float(x) * 256))
+                df['x'] = df['x'].apply(lambda x: "%03d" % (float(x)))
+                df['y'] = df['y'].apply(lambda x: "%03d" % (float(x)))
+                df['w'] = df['w'].apply(lambda x: "%03d" % (float(x)))
+                df['h'] = df['h'].apply(lambda x: "%03d" % (float(x)))
 
                 df['Conf (%)'] = df['Conf (%)'].apply(
                     lambda x: "%2.2f" % (float(x) * 100)
@@ -73,7 +73,7 @@ def getAnnotationDF(folder: str):
                 return df
 
 
-def saveImage(file):
+def transformImage(file):
     transform = transforms.Compose(
         [
             transforms.Resize(286, InterpolationMode.BICUBIC),
@@ -83,28 +83,47 @@ def saveImage(file):
 
     img = transform(Image.open(file))
 
-    path = os.getcwd() + r'/temp/output'
-
-    shutil.rmtree(path, ignore_errors=True)
-
-    os.mkdir(path)
-
-    img.save(path + "/%s_O.png" % (datetime.now().strftime("%Y%m%d")))
-
-    return path
+    return img
 
 
 def createTempZipFile(folder):
     return shutil.make_archive('./temp/result', "zip", folder)
 
 
-# Load models
-enhancer = LowLightImageEnhancer()
-detector = ObjectDetector()
+def loadModels():
+    # Load models
+    enhancer = LowLightImageEnhancer()
+    detector = ObjectDetector()
+
+    return enhancer, detector
+
+
+def enhanceAndDetect(img: Image):
+    path = os.getcwd() + r'/temp/output'
+
+    shutil.rmtree(path, ignore_errors=True)
+
+    os.mkdir(path)
+
+    original_img = img
+    enhanced_img = enhancer.process(original_img)
+    detected_original, detected_enhanced = detector.predict(original_img, enhanced_img)
+
+    fname = datetime.now().strftime("%Y%m%d")
+
+    original_img.save(path + "/%s_O.png" % fname)
+    enhanced_img.save(path + "/%s_E.png" % fname)
+    detected_original.save(path + "/%s_DO.png" % fname)
+    detected_enhanced.save(path + "/%s_DE.png" % fname)
+
+    return [original_img, enhanced_img, detected_original, detected_enhanced], path
+
 
 st.set_page_config(layout="wide", page_title="Low Light Image Enhancement")
 
 st.header("Enhance And Detect Object in Low Light Image")
+
+enhancer, detector = loadModels()
 
 st.sidebar.write("## Upload or Select :gear:")
 
@@ -112,45 +131,37 @@ my_upload = st.sidebar.file_uploader(
     "Upload an image", type=["png", "jpg", "jpeg"],
 )
 
-folders = [root for root, _, files in os.walk(
-    os.path.join(os.getcwd(), 'pictures')) if len(files) != 0]
-
-
-col1, col2, col3 = st.columns(3)
+sampleImages = [[os.path.join(root, file) for file in files]
+                for root, _, files in os.walk(os.getcwd() + '/pictures/sample') if len(files) != 0][0]
 
 with st.sidebar:
     idx = image_select(
         label="Select a low light image",
         use_container_width=False,
         return_value="index",
-        images=[getTargetImage(folder, ImageType.ORIGINAL)
-                for folder in folders],
+        images=sampleImages,
     )
 
-target_folder = saveImage(getTargetImage(folders[idx], ImageType.ORIGINAL, path_only=True)) if my_upload is None else saveImage(my_upload)
+img = transformImage(sampleImages[idx] if my_upload is None else my_upload)
 
-original_img = getTargetImage(target_folder, ImageType.ORIGINAL)
+processed_imgs, tmp_path = enhanceAndDetect(img)
 
-col1.image(original_img, caption="Original Image", use_column_width=True,)
+col1, col2, col3 = st.columns(3)
 
-if 'temp' in target_folder:
-    enhanced_img = enhancer.process(original_img)
-    detector.predict(original_img, enhanced_img)
 
-col1.image(getTargetImage(
-    target_folder, ImageType.DETECT_ORIGINAL), caption="Detection Image", use_column_width=True)
+col1.image(processed_imgs[0], caption="Original Image", use_column_width=True,)
 
-col2.image(getTargetImage(
-    target_folder, ImageType.ENHANCED), caption="Enhanced Image", use_column_width=True)
+col2.image(processed_imgs[1], caption="Enhanced Image", use_column_width=True)
 
-col2.image(getTargetImage(
-    target_folder, ImageType.DETECT_ENHANCED), caption="Detection and Enhanced Image", use_column_width=True)
+col1.image(processed_imgs[2], caption="Detection Image", use_column_width=True)
 
-result_path = createTempZipFile(target_folder)
+col2.image(processed_imgs[3], caption="Detection and Enhanced Image", use_column_width=True)
+
+result_path = createTempZipFile(tmp_path)
 
 with open(result_path, "rb") as file:
-    col3.download_button("Download Result", data=file,
-                         mime="application/zip", file_name='result.zip',
-                         )
+    col3.download_button("Download Result", data=file, mime="application/zip", file_name='result.zip')
 
-col3.table(getAnnotationDF(target_folder))
+col3.write("**Running time**: {:.2f}s".format(enhancer.running_time + detector.running_time))
+
+col3.table(getAnnotationDF(tmp_path))

@@ -11,6 +11,7 @@ from streamlit_image_select import image_select
 from torchvision.transforms import InterpolationMode
 
 from src.enhancer import LowLightImageEnhancer
+from src.detector import ObjectDetector
 from src.mapping import cls_to_label
 
 
@@ -40,10 +41,12 @@ def getImageType(filename: str):
     return t
 
 
-def getTargetImage(folder: str, target: ImageType, size=256):
+def getTargetImage(folder: str, target: ImageType, size=256, path_only=False):
     for _, _, files in os.walk(folder):
         for file in files:
             if getImageType(file) == target:
+                if path_only:
+                    return os.path.join(folder, file)
                 return Image.open(os.path.join(folder, file)).resize((size, size))
 
 
@@ -97,6 +100,7 @@ def createTempZipFile(folder):
 
 # Load models
 enhancer = LowLightImageEnhancer()
+detector = ObjectDetector()
 
 st.set_page_config(layout="wide", page_title="Low Light Image Enhancement")
 
@@ -123,7 +127,7 @@ with st.sidebar:
                 for folder in folders],
     )
 
-target_folder = folders[idx] if my_upload is None else saveImage(my_upload)
+target_folder = saveImage(getTargetImage(folders[idx], ImageType.ORIGINAL, path_only=True)) if my_upload is None else saveImage(my_upload)
 
 original_img = getTargetImage(target_folder, ImageType.ORIGINAL)
 
@@ -131,21 +135,22 @@ col1.image(original_img, caption="Original Image", use_column_width=True,)
 
 if 'temp' in target_folder:
     enhanced_img = enhancer.process(original_img)
+    detector.predict(original_img, enhanced_img)
 
-# col1.image(getTargetImage(
-#     target_folder, ImageType.DETECT_ORIGINAL), caption="Detection Image", use_column_width=True)
+col1.image(getTargetImage(
+    target_folder, ImageType.DETECT_ORIGINAL), caption="Detection Image", use_column_width=True)
 
 col2.image(getTargetImage(
     target_folder, ImageType.ENHANCED), caption="Enhanced Image", use_column_width=True)
 
-# col2.image(getTargetImage(
-#     target_folder, ImageType.DETECT_ENHANCED), caption="Detection and Enhanced Image", use_column_width=True)
+col2.image(getTargetImage(
+    target_folder, ImageType.DETECT_ENHANCED), caption="Detection and Enhanced Image", use_column_width=True)
 
-# result_path = createTempZipFile(target_folder)
+result_path = createTempZipFile(target_folder)
 
-# with open(result_path, "rb") as file:
-#     col3.download_button("Download Result", data=file,
-#                          mime="application/zip", file_name='result.zip',
-#                          )
+with open(result_path, "rb") as file:
+    col3.download_button("Download Result", data=file,
+                         mime="application/zip", file_name='result.zip',
+                         )
 
-# col3.table(getAnnotationDF(target_folder))
+col3.table(getAnnotationDF(target_folder))
